@@ -195,8 +195,18 @@ int main() {
     // Muda a simulação do participante 2 para não ser lento
     parts[1].delay_ms = 100;
 
-    // CENÁRIO 2: Queda do Coordenador (O Calcanhar de Aquiles do 2PC)
-    execute_transaction(102, parts, 2, 1000, 1);
+    // CENÁRIO 2: Sucesso, sem timeout
+    execute_transaction(102, parts, 2, 1000, 0);
+
+    // Reseta estado para o próximo teste
+    for(int i=0; i<2; i++) {
+        pthread_mutex_lock(&parts[i].lock);
+        parts[i].status = INIT;
+        pthread_mutex_unlock(&parts[i].lock);
+    }
+
+    // CENÁRIO 3: Queda do Coordenador (O Calcanhar de Aquiles do 2PC)
+    execute_transaction(103, parts, 2, 1000, 1);
 
     printf("\n=== ESTADO PÓS-CRASH ===\n");
     for(int i=0; i<2; i++) {
