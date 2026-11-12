@@ -71,6 +71,9 @@ int main(int argc, char** args) {
     // CENÁRIO 2: Sucesso, sem timeout
     execute_transaction(102, clientSockets, participants, 1000, 1);
 
+    free(clientSockets);
+    free(clientAddresses);
+    free(clientLengths);
 
     return 0;
 }
@@ -119,6 +122,10 @@ void execute_transaction(int tx_id, int* clientSockets, int count, int timeout_m
         printf("\n[CRITICAL ERROR] 💥 O Coordenador sofreu um SIGSEGV e morreu!\n");
         printf("[CRITICAL ERROR] As mensagens da Fase 2 nunca foram enviadas.\n");
         if (all_agreed) printf("[CRITICAL ERROR] Todos o nodos tinha entrado em acordo.\n");
+
+        free(threads);
+        free(statuses);
+        free(received);
         return; // Retorna sem enviar Commit ou Abort
     }
 
@@ -154,6 +161,10 @@ void execute_transaction(int tx_id, int* clientSockets, int count, int timeout_m
 
     // Dá um tempo para as threads processarem antes de encerrar a função
     usleep(200000);
+
+    free(threads);
+    free(statuses);
+    free(received);
 }
 
 void* waitForResponse(void* args) {

@@ -63,6 +63,7 @@ int main(int argc, char** args) {
             printf("Received PREPARE command\n");
             // printf("[Participante %d] Validando transacao...\n", p->id);
             usleep(delay_us); // Simula latência/I/O
+            //TODO: FUNCIONALIDADE AQUI
 
             status = fail ? ABORT : READY;
 
@@ -82,7 +83,7 @@ int main(int argc, char** args) {
         else if (current_msg == MSG_ABORT) {
             printf("Received ABORT command\n");
             status = (status == READY || status == INIT) ? ABORTED : status;
-
+            //TODO: REVERT TO PREVIOUS STATE
             if (status == READY || status == INIT) printf("\tSuccessfully aborted!\n");
             // printf("send: %d\n", status);
             write(serverSocket, &status, sizeof(status));
@@ -92,6 +93,7 @@ int main(int argc, char** args) {
             status = INIT;
         }
     }
+    // fclose(undo_log);
     return 0;
 }
 
