@@ -68,12 +68,6 @@ int main(int argc, char** args) {
     for (int i = 0; i < participants; i++) printf("\n%d", clientSockets[i]);
     execute_transaction(101, clientSockets, participants, 1000, 0);
 
-    // Reseta estado para o próximo teste
-    for(int i = 0; i < participants; i++) {
-        Message message = MSG_RESET;
-        write(clientSockets[i], &message, sizeof(message));
-    }
-
     // CENÁRIO 2: Sucesso, sem timeout
     execute_transaction(102, clientSockets, participants, 1000, 1);
 
@@ -95,7 +89,7 @@ void execute_transaction(int tx_id, int* clientSockets, int count, int timeout_m
 
     for (int i = 0; i < count; i++) { // ENVIA COMANDO DE PREPARACAO
         Message message = MSG_PREPARE;
-        // printf("PREPARE: %d, %d\n", count, clientSockets[i]);
+        // printf("PREPARE: %d, %d\n", i, clientSockets[i]);
         long result = write(clientSockets[i], &message, sizeof(message));
         received[i] = result != -1;
         if (result != -1){
@@ -112,7 +106,7 @@ void execute_transaction(int tx_id, int* clientSockets, int count, int timeout_m
         if (received[i]) {
             pthread_join(threads[i], NULL);
             if (statuses[i] != READY) all_agreed = FALSE;
-            printf("status %d: %d\n", i, statuses[i]);
+            // printf("status %d: %d\n", i, statuses[i]);
         }
         else all_agreed = FALSE;
     }
@@ -167,7 +161,10 @@ void* waitForResponse(void* args) {
     // printf("WAIT\n");
     long result = read(listener->socket, listener->status, sizeof(*listener->status));
     // printf("received %d\n", *listener->status);
-    if (result < 0) *listener->status = TIMEOUT;
+    if (result < 0) {
+        // printf("timeout\n");
+        *listener->status = TIMEOUT;
+    }
 
     return NULL;
 }

@@ -68,25 +68,29 @@ int main(int argc, char** args) {
 
             if (status == ABORTED) printf("\tInduced failure.\n");
             else printf("\tSuccessfully prepared.\n");
+            // printf("send: %d\n", status);
+            write(serverSocket, &status, sizeof(status));
         }
         else if (current_msg == MSG_COMMIT) {
             printf("Received COMMIT command\n");
             status = status == READY ? COMMITTED : status;
 
             if (status == COMMITTED) printf("\tSuccessfully commited!\n");
+            // printf("send: %d\n", status);
+            write(serverSocket, &status, sizeof(status));
         }
         else if (current_msg == MSG_ABORT) {
             printf("Received ABORT command\n");
             status = (status == READY || status == INIT) ? ABORTED : status;
 
             if (status == READY || status == INIT) printf("\tSuccessfully aborted!\n");
+            // printf("send: %d\n", status);
+            write(serverSocket, &status, sizeof(status));
         }
         else if (current_msg == MSG_RESET) {
             printf("Received RESET command\n");
             status = INIT;
         }
-        // printf("send: %d\n", status);
-        write(serverSocket, &status, sizeof(status));
     }
     return 0;
 }
