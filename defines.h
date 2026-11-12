@@ -1,5 +1,5 @@
 // Estados possíveis de uma transação no participante
-typedef enum { INIT, PREPARING, READY, COMMITTED, ABORTED, TIMEOUT } Status;
+typedef enum { INIT, PREPARING, READY, COMMITTED, ABORT, ABORTED, TIMEOUT } Status;
 // Mensagens enviadas do coordenador para o participante
 typedef enum { MSG_NONE, MSG_PREPARE, MSG_COMMIT, MSG_ABORT, MSG_EXIT, MSG_RESET } Message;
 

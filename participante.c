@@ -14,7 +14,7 @@ void setSocketTimeout(long usec, int socket);
 int main(int argc, char** args) {
 
     if (argc < 5) {
-        printf("Format: ./participante <IP> <Port> <delay us> <fail/success>");
+        printf("Format: ./participante <IP> <Port> <delay us> <fail/success>\n");
         return -1;
     }
 
@@ -64,9 +64,9 @@ int main(int argc, char** args) {
             // printf("[Participante %d] Validando transacao...\n", p->id);
             usleep(delay_us); // Simula latência/I/O
 
-            status = fail ? ABORTED : READY;
+            status = fail ? ABORT : READY;
 
-            if (status == ABORTED) printf("\tInduced failure.\n");
+            if (status == ABORT) printf("\tInduced failure.\n");
             else printf("\tSuccessfully prepared.\n");
             // printf("send: %d\n", status);
             write(serverSocket, &status, sizeof(status));
