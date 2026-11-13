@@ -21,8 +21,8 @@ void* waitForResponse(void* args);
 
 int main(int argc, char** args) {
 
-    if (argc < 6) {
-        printf("Format: ./coordenador_cinema <IP> <Port> <price> <card_num> <seat_num> <fail/success>");
+    if (argc < 7) {
+        printf("Format: ./coordenador_cinema <IP> <Port> <timeout_usec> <price> <card_num> <seat_num> <fail/success>");
         return -1;
     }
 
@@ -41,15 +41,17 @@ int main(int argc, char** args) {
     bind(serverSocket, (struct sockaddr *)&serverAddress, serverLength);
     listen(serverSocket, PARTICIPANTS_CINEMA);
 
-    int price = atoi(args[3]);
-    int card_num = atoi(args[4]);
-    int seat_num = atoi(args[5]);
+    int timeout_usec = atoi(args[3]);
+
+    int price = atoi(args[4]);
+    int card_num = atoi(args[5]);
+    int seat_num = atoi(args[6]);
     transaction_t transaction;
     transaction.price = price;
     transaction.card_num = card_num;
     transaction.seat_num = seat_num;
 
-    int fail = strcmp(args[6], "fail") == 0;
+    int fail = strcmp(args[7], "fail") == 0;
 
     for (int participant = 0; participant < PARTICIPANTS_CINEMA; participant++) {
         printf("Awaiting participants\n");
@@ -59,8 +61,8 @@ int main(int argc, char** args) {
             (struct sockaddr *)&clientAddresses[participant], &clientLengths[participant]);
 
         struct timeval timeout;
-        timeout.tv_sec = 0;
-        timeout.tv_usec = 10000;
+        timeout.tv_sec = timeout_usec/1000000;
+        timeout.tv_usec = timeout_usec - (timeout.tv_sec * 1000000);
         setsockopt(clientSockets[participant], SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
         printf("Participant %d connected (socket: %d)\n", participant, clientSockets[participant]);
