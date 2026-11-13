@@ -93,7 +93,7 @@ int main(int argc, char** args) {
             status = INIT;
         }
     }
-    // fclose(undo_log);
+
     return 0;
 }
 

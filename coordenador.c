@@ -15,13 +15,13 @@
 
 #include "defines.h"
 
-void execute_transaction(int tx_id, int* clientSockets, int count, int timeout_ms, int simulate_crash);
+void execute_transaction(int tx_id, int* clientSockets, int count, int simulate_crash);
 void* waitForResponse(void* args);
 
 int main(int argc, char** args) {
 
-    if (argc < 3) {
-        printf("Format: ./coordenador <IP> <Port>");
+    if (argc < 4) {
+        printf("Format: ./coordenador <IP> <Port> <participants>");
         return -1;
     }
 
@@ -40,36 +40,28 @@ int main(int argc, char** args) {
     bind(serverSocket, (struct sockaddr *)&serverAddress, serverLength);
     listen(serverSocket, MAX_PARTICIPANTS);
 
-    int participants = 0;
-    int end = FALSE;
+    int participants = atoi(args[3]);
 
-    do {
+    for (int participant = 0; participant < participants; participant++) {
         printf("Awaiting participants\n");
 
-        clientLengths[participants] = sizeof(clientAddresses[participants]);
-        clientSockets[participants] = accept(serverSocket,
-            (struct sockaddr *)&clientAddresses[participants], &clientLengths[participants]);
+        clientLengths[participant] = sizeof(clientAddresses[participant]);
+        clientSockets[participant] = accept(serverSocket,
+            (struct sockaddr *)&clientAddresses[participant], &clientLengths[participant]);
 
         struct timeval timeout;
         timeout.tv_sec = 0;
         timeout.tv_usec = 10000;
         setsockopt(clientSockets[participants], SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
-        printf("Participant %d connected (socket: %d)\n", participants, clientSockets[participants]);
-        participants++;
-        if (participants >= MAX_PARTICIPANTS) end = TRUE;
-        if (!end) {
-            printf("Add more participants?(y/n)\n>");
-            char input;
-            scanf("%c", &input);
-            end = input == 'n' || input == 'N';
-        }
-    }while (!end);
-    for (int i = 0; i < participants; i++) printf("\n%d", clientSockets[i]);
-    execute_transaction(101, clientSockets, participants, 1000, 0);
+        printf("Participant %d connected (socket: %d)\n", participant, clientSockets[participant]);
+    }
+
+    // for (int i = 0; i < participants; i++) printf("\n%d", clientSockets[i]);
+    execute_transaction(101, clientSockets, participants, 0);
 
     // CENÁRIO 2: Sucesso, sem timeout
-    execute_transaction(102, clientSockets, participants, 1000, 1);
+    execute_transaction(102, clientSockets, participants, 1);
 
     free(clientSockets);
     free(clientAddresses);
@@ -81,11 +73,11 @@ int main(int argc, char** args) {
 // ==========================================
 // Rotina do Coordenador
 // ==========================================
-void execute_transaction(int tx_id, int* clientSockets, int count, int timeout_ms, int simulate_crash) {
+void execute_transaction(int tx_id, int* clientSockets, int count, int simulate_crash) {
     printf("\n=== INICIANDO TRANSACAO TX-%d ===\n", tx_id);
 
     // FASE 1: Prepare
-    printf("[Coordenador] Fase 1: Enviando Prepare (Timeout de %dms)\n", timeout_ms);
+    printf("[Coordenador] Fase 1: Enviando Prepare\n");
     int* received = calloc(count, sizeof(int));
     pthread_t* threads = calloc(count, sizeof(pthread_t));
     Status* statuses = calloc(count, sizeof(Status));
