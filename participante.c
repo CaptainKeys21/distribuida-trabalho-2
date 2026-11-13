@@ -39,7 +39,7 @@ int main(int argc, char** args) {
 
     Status status = INIT;
     while (1) {
-        if (status == COMMITTED || status == INIT || status == TIMEOUT) {
+        if (status == COMMITTED || status == INIT || status == TIMEOUT || status == ABORTED) {
             status = INIT;
             setSocketTimeout(0, serverSocket);
         }

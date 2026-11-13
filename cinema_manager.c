@@ -15,7 +15,7 @@ void setSocketTimeout(long usec, int socket);
 int main(int argc, char** args) {
 
     if (argc < 4) {
-        printf("Format: ./manager <IP> <Port> <name>\n");
+        printf("Format: ./cinema_manager <IP> <Port> <name>\n");
         return -1;
     }
 

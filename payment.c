@@ -15,7 +15,7 @@ void setSocketTimeout(long usec, int socket);
 int main(int argc, char** args) {
 
     if (argc < 4) {
-        printf("Format: ./participante <IP> <Port> <name>\n");
+        printf("Format: ./payment <IP> <Port> <name>\n");
         return -1;
     }
 

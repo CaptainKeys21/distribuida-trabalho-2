@@ -22,7 +22,7 @@ void* waitForResponse(void* args);
 int main(int argc, char** args) {
 
     if (argc < 6) {
-        printf("Format: ./coordenador <IP> <Port> <price> <card_num> <seat_num> <fail/success>");
+        printf("Format: ./coordenador_cinema <IP> <Port> <price> <card_num> <seat_num> <fail/success>");
         return -1;
     }
 
