@@ -15,7 +15,7 @@ void setSocketTimeout(long usec, int socket);
 int main(int argc, char** args) {
 
     if (argc < 4) {
-        printf("Format: ./participante <IP> <Port> <delay us>\n");
+        printf("Format: ./participante <IP> <Port> <name>\n");
         return -1;
     }
 
@@ -35,14 +35,38 @@ int main(int argc, char** args) {
         return  -2;
     }
 
+    char* name = args[3];
+
+    char* log_name = calloc(1, strlen(name) + 5);
+    strcpy(log_name, name);
+    strcat(log_name, "_log");
+    FILE* undo_log = fopen(log_name, "wb+");
+    int log_entries = 0;
+
+    FILE* accounts;
+    if (!access(name, F_OK)) {
+        accounts = fopen(name, "rb+");
+        printf("Accounts file already existed!\n");
+    }
+    else {
+        accounts = fopen(name, "wb+");
+        printf("Accounts file created!\n");
+
+        for (int i = 0; i < TOTAL_SEATS; i++) {
+            fseek(accounts, i * sizeof(int), SEEK_SET);
+            int money = DEFAULT_MONEY;
+            fwrite(&money, sizeof(int), 1, accounts);
+        }
+    }
+
     Status status = INIT;
     while (1) {
-        if (status == COMMITTED || status == INIT || status == TIMEOUT) {
+        if (status == COMMITTED || status == INIT || status == TIMEOUT || status == ABORTED) {
             status = INIT;
             setSocketTimeout(0, serverSocket);
         }
         else {
-            setSocketTimeout(10000, serverSocket);
+            setSocketTimeout(100000, serverSocket);
         }
 
         // Aguarda uma mensagem na mailbox usando variável de condição
@@ -63,11 +87,42 @@ int main(int argc, char** args) {
             transaction_t transaction;
             read(serverSocket, &transaction, sizeof(transaction_t));
 
-            status = fail ? ABORT : READY;
+            // printf("%d, %d\n", transaction.card_num, transaction.price);
 
-            if (status == ABORT) printf("\tInduced failure.\n");
-            else printf("\tSuccessfully prepared.\n");
-            // printf("send: %d\n", status);
+            fseek(accounts, transaction.card_num * sizeof(int), SEEK_SET);
+            int balance = 0;
+            fread(&balance, sizeof(int), 1, accounts);
+
+            // printf("bal: %d\n", balance);
+
+            if (balance >= transaction.price) {
+                status = READY;
+                printf("\tPayment successful.\n");
+            }
+            else {
+                status = ABORT;
+                printf("\tPayment declined.\n");
+            }
+
+            int card = transaction.card_num;
+            int price = transaction.price;
+            fseek(undo_log, 2 * log_entries * sizeof(int), SEEK_SET);
+            fwrite(&card, sizeof(int), 1, undo_log);
+            fwrite(&price, sizeof(int), 1, undo_log);
+            log_entries++;
+
+            fseek(accounts, transaction.card_num * sizeof(int), SEEK_SET);
+            int new_balance = balance - transaction.price;
+            // printf("offset: %ld, value: %d\n", transaction.card_num * sizeof(int), new_balance);
+            size_t written = fwrite(&new_balance, sizeof(int), 1, accounts);
+            // printf("written: %lu\n", written);
+
+            // Eu sei que parece sem sentido, mas esse read atualiza o valor no arquivo, sem ele new_balance nunca e escrito
+            fseek(accounts, transaction.card_num * sizeof(int), SEEK_SET);
+            int newest_balance = 0;
+            fread(&newest_balance, sizeof(int), 1, accounts);
+            // printf("newest: %d\n", newest_balance);
+
             write(serverSocket, &status, sizeof(status));
         }
         else if (current_msg == MSG_COMMIT) {
@@ -81,9 +136,32 @@ int main(int argc, char** args) {
         else if (current_msg == MSG_ABORT) {
             printf("Received ABORT command\n");
             status = (status == READY || status == INIT) ? ABORTED : status;
-            //TODO: REVERT TO PREVIOUS STATE
+
+            int card = 0;
+            int change = 0;
+
+            fseek(undo_log, 2 * (log_entries - 1) * sizeof(int), SEEK_SET);
+            fread(&card, sizeof(int), 1, undo_log);
+            fread(&change, sizeof(int), 1, undo_log);
+
+            int balance = 0;
+            fseek(accounts, card * sizeof(int), SEEK_SET);
+            fread(&balance, sizeof(int), 1, accounts);
+
+            balance += change;
+            fseek(accounts, card * sizeof(int), SEEK_SET);
+            // printf("offset: %ld, value: %d\n", card * sizeof(int), balance);
+            size_t written2 = fwrite(&balance, sizeof(int), 1, accounts);
+            // printf("written2: %lu\n", written2);
+            log_entries--;
+
+            // NAO REMOVER
+            fseek(accounts, card * sizeof(int), SEEK_SET);
+            int newestest_balance = 0;
+            fread(&newestest_balance, sizeof(int), 1, accounts);
+            // printf("newestest: %d\n", newestest_balance);
+
             if (status == READY || status == INIT) printf("\tSuccessfully aborted!\n");
-            // printf("send: %d\n", status);
             write(serverSocket, &status, sizeof(status));
         }
         else if (current_msg == MSG_RESET) {

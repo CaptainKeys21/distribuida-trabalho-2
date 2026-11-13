@@ -44,7 +44,7 @@ int main(int argc, char** args) {
             setSocketTimeout(0, serverSocket);
         }
         else {
-            setSocketTimeout(10000, serverSocket);
+            setSocketTimeout(10000000, serverSocket);
         }
 
         // Aguarda uma mensagem na mailbox usando variável de condição
@@ -69,7 +69,7 @@ int main(int argc, char** args) {
 
             if (status == ABORT) printf("\tInduced failure.\n");
             else printf("\tSuccessfully prepared.\n");
-            // printf("send: %d\n", status);
+            printf("send: %d\n", status);
             write(serverSocket, &status, sizeof(status));
         }
         else if (current_msg == MSG_COMMIT) {
@@ -77,7 +77,7 @@ int main(int argc, char** args) {
             status = status == READY ? COMMITTED : status;
 
             if (status == COMMITTED) printf("\tSuccessfully commited!\n");
-            // printf("send: %d\n", status);
+            printf("send: %d\n", status);
             write(serverSocket, &status, sizeof(status));
         }
         else if (current_msg == MSG_ABORT) {
@@ -85,7 +85,7 @@ int main(int argc, char** args) {
             status = (status == READY || status == INIT) ? ABORTED : status;
             //TODO: REVERT TO PREVIOUS STATE
             if (status == READY || status == INIT) printf("\tSuccessfully aborted!\n");
-            // printf("send: %d\n", status);
+            printf("send: %d\n", status);
             write(serverSocket, &status, sizeof(status));
         }
         else if (current_msg == MSG_RESET) {

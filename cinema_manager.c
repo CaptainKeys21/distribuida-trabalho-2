@@ -35,25 +35,37 @@ int main(int argc, char** args) {
         return  -2;
     }
     char* name = args[3];
-    FILE* undo_log = fopen(name, "rwb");
+
+    char* log_name = calloc(1, strlen(name) + 5);
+    strcpy(log_name, name);
+    strcat(log_name, "_log");
+    FILE* undo_log = fopen(log_name, "w+b");
     int log_entries = 0;
 
-    FILE* seats = fopen(name, "rwb");
+    FILE* seats;
+    if (!access(name, F_OK)) {
+        seats = fopen(name, "r+b");
+        printf("Seats file already existed!\n");
+    }
+    else {
+        seats = fopen(name, "w+b");
+        printf("Seats file created!\n");
 
-    for (int i = 0; i < TOTAL_SEATS; i++) {
-        fseek(seats, i * sizeof(int), SEEK_SET);
-        int empty = 0;
-        fwrite(&empty, sizeof(int), 1, seats);
+        for (int i = 0; i < TOTAL_SEATS; i++) {
+            fseek(seats, i * sizeof(int), SEEK_SET);
+            int empty = 0;
+            fwrite(&empty, sizeof(int), 1, seats);
+        }
     }
 
     Status status = INIT;
     while (1) {
-        if (status == COMMITTED || status == INIT || status == TIMEOUT) {
+        if (status == COMMITTED || status == INIT || status == TIMEOUT || ABORTED) {
             status = INIT;
             setSocketTimeout(0, serverSocket);
         }
         else {
-            setSocketTimeout(10000, serverSocket);
+            setSocketTimeout(100000, serverSocket);
         }
 
         // Aguarda uma mensagem na mailbox usando variável de condição
@@ -74,25 +86,31 @@ int main(int argc, char** args) {
             transaction_t transaction;
             read(serverSocket, &transaction, sizeof(transaction_t));
 
-            fseek(seats, transaction.seat_num, SEEK_SET);
-            int reserved = 0;
+            fseek(seats, transaction.seat_num * sizeof(int), SEEK_SET);
+            int reserved = -1;
             fread(&reserved, sizeof(int), 1, seats);
+            printf("reserved: %d, %ld\n", reserved, transaction.seat_num * sizeof(int));
 
             if (reserved) {
                 status = ABORT;
                 printf("\tSeat already reserved.\n");
-                reserved = 1;
             }
             else {
                 status = READY;
-                fseek(seats, transaction.seat_num, SEEK_SET);
+                reserved = 1;
+                fseek(seats, transaction.seat_num * sizeof(int), SEEK_SET);
                 int reserve = 1;
                 fwrite(&reserve, sizeof(int), 1, seats);
+
+                fseek(seats, transaction.seat_num * sizeof(int), SEEK_SET);
+                int read = 1;
+                fread(&read, sizeof(int), 1, seats);
 
                 printf("\tSeat successfully reserved.\n");
             }
 
             int num = transaction.seat_num;
+            fseek(undo_log, 2 * log_entries * sizeof(int), SEEK_SET);
             fwrite(&num, sizeof(int), 1, undo_log);
             fwrite(&reserved, sizeof(int), 1, undo_log);
             log_entries++;
@@ -111,14 +129,21 @@ int main(int argc, char** args) {
             printf("Received ABORT command\n");
             status = (status == READY || status == INIT) ? ABORTED : status;
             int reserved_seat = 0;
+            int previous_seat_status = 0;
 
-            fseek(undo_log, 2 * log_entries * sizeof(int), SEEK_SET);
+            fseek(undo_log, 2 * (log_entries - 1) * sizeof(int), SEEK_SET);
             fread(&reserved_seat, sizeof(int), 1, undo_log);
+            fread(&previous_seat_status, sizeof(int), 1, undo_log);
 
-            int unreserved = 0;
+            printf("prev: %d\n", previous_seat_status);
+
             fseek(seats, reserved_seat * sizeof(int), SEEK_SET);
-            fwrite(&unreserved, sizeof(int), 1, seats);
+            fwrite(&previous_seat_status, sizeof(int), 1, seats);
             log_entries--;
+
+            int verify = 0;
+            fseek(seats, reserved_seat * sizeof(int), SEEK_SET);
+            fread(&verify, sizeof(int), 1, seats);
 
             if (status == READY || status == INIT) printf("\tSuccessfully aborted!\n");
             // printf("send: %d\n", status);
@@ -129,7 +154,9 @@ int main(int argc, char** args) {
             status = INIT;
         }
     }
+    free(log_name);
     fclose(undo_log);
+    fclose(seats);
     return 0;
 }
 

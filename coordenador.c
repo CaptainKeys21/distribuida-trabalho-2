@@ -50,9 +50,9 @@ int main(int argc, char** args) {
             (struct sockaddr *)&clientAddresses[participant], &clientLengths[participant]);
 
         struct timeval timeout;
-        timeout.tv_sec = 0;
-        timeout.tv_usec = 10000;
-        setsockopt(clientSockets[participants], SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+        timeout.tv_sec = 10;
+        timeout.tv_usec = 0;
+        setsockopt(clientSockets[participant], SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
         printf("Participant %d connected (socket: %d)\n", participant, clientSockets[participant]);
     }
@@ -81,6 +81,7 @@ void execute_transaction(int tx_id, int* clientSockets, int count, int simulate_
     int* received = calloc(count, sizeof(int));
     pthread_t* threads = calloc(count, sizeof(pthread_t));
     Status* statuses = calloc(count, sizeof(Status));
+    listener_args_t* args = calloc(count, sizeof(listener_args_t));
 
     for (int i = 0; i < count; i++) { // ENVIA COMANDO DE PREPARACAO
         Message message = MSG_PREPARE;
@@ -88,10 +89,10 @@ void execute_transaction(int tx_id, int* clientSockets, int count, int simulate_
         long result = write(clientSockets[i], &message, sizeof(message));
         received[i] = result != -1;
         if (result != -1){
-            listener_args_t args;
-            args.socket = clientSockets[i];
-            args.status = &statuses[i];
-            pthread_create(&threads[i], NULL, waitForResponse, &args);
+            args[i].socket = clientSockets[i];
+            args[i].status = &statuses[i];
+            // printf("sock: %d, stat: %p\n", args[i].socket, args[i].status);
+            pthread_create(&threads[i], NULL, waitForResponse, &args[i]);
         }
     }
 
@@ -113,7 +114,7 @@ void execute_transaction(int tx_id, int* clientSockets, int count, int simulate_
     if (simulate_crash) {
         printf("\n[CRITICAL ERROR] 💥 O Coordenador sofreu um SIGSEGV e morreu!\n");
         printf("[CRITICAL ERROR] As mensagens da Fase 2 nunca foram enviadas.\n");
-        if (all_agreed) printf("[CRITICAL ERROR] Todos o nodos tinha entrado em acordo.\n");
+        if (all_agreed) printf("[CRITICAL ERROR] Todos os nodos tinham entrado em acordo.\n");
 
         free(threads);
         free(statuses);
@@ -128,10 +129,9 @@ void execute_transaction(int tx_id, int* clientSockets, int count, int simulate_
         long result = write(clientSockets[i], &message, sizeof(message));
         received[i] = result != -1;
         if (result != -1){
-            listener_args_t args;
-            args.socket = clientSockets[i];
-            args.status = &statuses[i];
-            pthread_create(&threads[i], NULL, waitForResponse, &args);
+            args[i].socket = clientSockets[i];
+            args[i].status = &statuses[i];
+            pthread_create(&threads[i], NULL, waitForResponse, &args[i]);
         }
     }
 
@@ -161,7 +161,7 @@ void execute_transaction(int tx_id, int* clientSockets, int count, int simulate_
 
 void* waitForResponse(void* args) {
     listener_args_t* listener = (listener_args_t*)args;
-    // printf("WAIT\n");
+    // printf("WAIT %d, %p\n", listener->socket, listener->status);
     long result = read(listener->socket, listener->status, sizeof(*listener->status));
     // printf("received %d\n", *listener->status);
     if (result < 0) {
