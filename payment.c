@@ -135,7 +135,7 @@ int main(int argc, char** args) {
         }
         else if (current_msg == MSG_ABORT) {
             printf("Received ABORT command\n");
-            status = (status == READY || status == INIT) ? ABORTED : status;
+            status = (status == READY || status == INIT || status == ABORT) ? ABORTED : status;
 
             int card = 0;
             int change = 0;

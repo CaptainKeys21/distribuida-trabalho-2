@@ -72,6 +72,7 @@ int main(int argc, char** args) {
     for (int i = 0; i < PARTICIPANTS_CINEMA; i++) {
         Message message = MSG_EXIT;
         write(clientSockets[i], &message, sizeof(Message));
+        close(clientSockets[i]);
     }
 
     free(clientSockets);
@@ -153,7 +154,7 @@ void execute_transaction(int tx_id, int* clientSockets, int count, int simulate_
         if (received[i]) {
             pthread_join(threads[i], NULL);
             if (statuses[i] != COMMITTED) everything_is_alright = FALSE;
-            printf("status %d: %d\n", i, statuses[i]);
+            // printf("status %d: %d\n", i, statuses[i]);
         }
         else everything_is_alright = FALSE;
     }

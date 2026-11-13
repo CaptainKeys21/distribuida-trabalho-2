@@ -60,7 +60,7 @@ int main(int argc, char** args) {
 
     Status status = INIT;
     while (1) {
-        if (status == COMMITTED || status == INIT || status == TIMEOUT || ABORTED) {
+        if (status == COMMITTED || status == INIT || status == TIMEOUT || status == ABORTED) {
             status = INIT;
             setSocketTimeout(0, serverSocket);
         }
@@ -70,6 +70,7 @@ int main(int argc, char** args) {
 
         // Aguarda uma mensagem na mailbox usando variável de condição
         Message current_msg;
+        // printf("Current status: %d\n", status);
         long result = read(serverSocket, &current_msg, sizeof(current_msg));
 
         if (result < 0) {
@@ -89,7 +90,7 @@ int main(int argc, char** args) {
             fseek(seats, transaction.seat_num * sizeof(int), SEEK_SET);
             int reserved = -1;
             fread(&reserved, sizeof(int), 1, seats);
-            printf("reserved: %d, %ld\n", reserved, transaction.seat_num * sizeof(int));
+            // printf("reserved: %d, %ld\n", reserved, transaction.seat_num * sizeof(int));
 
             if (reserved) {
                 status = ABORT;
@@ -127,7 +128,7 @@ int main(int argc, char** args) {
         }
         else if (current_msg == MSG_ABORT) {
             printf("Received ABORT command\n");
-            status = (status == READY || status == INIT) ? ABORTED : status;
+            status = (status == READY || status == INIT || status == ABORT) ? ABORTED : status;
             int reserved_seat = 0;
             int previous_seat_status = 0;
 
@@ -135,7 +136,7 @@ int main(int argc, char** args) {
             fread(&reserved_seat, sizeof(int), 1, undo_log);
             fread(&previous_seat_status, sizeof(int), 1, undo_log);
 
-            printf("prev: %d\n", previous_seat_status);
+            // printf("prev: %d\n", previous_seat_status);
 
             fseek(seats, reserved_seat * sizeof(int), SEEK_SET);
             fwrite(&previous_seat_status, sizeof(int), 1, seats);
