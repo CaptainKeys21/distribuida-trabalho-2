@@ -71,6 +71,9 @@ int main(int argc, char** args) {
     // for (int i = 0; i < participants; i++) printf("\n%d", clientSockets[i]);
     execute_transaction(101, clientSockets, PARTICIPANTS_CINEMA, fail, transaction);
 
+    printf("Waiting for any delayed participant to end processing\n");
+    sleep(25);
+
     for (int i = 0; i < PARTICIPANTS_CINEMA; i++) {
         struct timeval timeout;
         timeout.tv_sec = 1;
@@ -126,7 +129,6 @@ void execute_transaction(int tx_id, int* clientSockets, int count, int simulate_
             pthread_join(threads[i], NULL);
             if (statuses[i] != READY) all_agreed = FALSE;
             if (statuses[i] == TIMEOUT) {
-                received[i] = FALSE;
                 printf("[WARNING participant %d timed out!\n", i);
             }
         }
@@ -155,7 +157,6 @@ void execute_transaction(int tx_id, int* clientSockets, int count, int simulate_
 
     // FASE 2: Commit ou Abort
     for (int i = 0; i < count; i++) {
-        if (received[i]){
             Message message = all_agreed ? MSG_COMMIT : MSG_ABORT;
             long result = write(clientSockets[i], &message, sizeof(message));
             received[i] = result != -1;
@@ -164,7 +165,6 @@ void execute_transaction(int tx_id, int* clientSockets, int count, int simulate_
                 args[i].status = &statuses[i];
                 pthread_create(&threads[i], NULL, waitForResponse, &args[i]);
             }
-        }
     }
 
     int everything_is_alright = TRUE;
@@ -186,7 +186,7 @@ void execute_transaction(int tx_id, int* clientSockets, int count, int simulate_
     }
 
     // Dá um tempo para as threads processarem antes de encerrar a função
-    usleep(200000);
+    usleep(1000);
 
     free(threads);
     free(statuses);

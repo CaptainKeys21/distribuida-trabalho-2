@@ -62,6 +62,8 @@ int main(int argc, char** args) {
         }
     }
 
+    int insufficient_balance = FALSE;
+
     Status status = INIT;
     while (1) {
         if (status == COMMITTED || status == INIT || status == TIMEOUT || status == ABORTED) {
@@ -76,106 +78,116 @@ int main(int argc, char** args) {
         Message current_msg;
         long result = read(serverSocket, &current_msg, sizeof(current_msg));
 
-        if (timeout) {
-            printf("Simulating processing taking too long.\n");
-            sleep(30);
-            timeout = FALSE;
-        }
-
-        if (result < 0) {
-            printf("TIMEOUT OCCURRED! IT SEEMS LIKE THE COORDINATOR HAS CRASHED!\nAWAITING NEW SIGNAL FROM COORDINATOR\n");
-            current_msg = MSG_NONE;
-            status = TIMEOUT;
-        }
-
-        if (current_msg == MSG_EXIT || fail) break;
-
-        if (current_msg == MSG_PREPARE) {
-            printf("Received PREPARE command\n");
-
+        if (fail && current_msg == MSG_PREPARE) {
             transaction_t transaction;
             read(serverSocket, &transaction, sizeof(transaction_t));
+        }
 
-            // printf("%d, %d\n", transaction.card_num, transaction.price);
-
-            fseek(accounts, transaction.card_num * sizeof(int), SEEK_SET);
-            int balance = 0;
-            fread(&balance, sizeof(int), 1, accounts);
-
-            // printf("bal: %d\n", balance);
-
-            if (balance >= transaction.price) {
-                status = READY;
-                printf("\tPayment successful.\n");
-            }
-            else {
-                status = ABORT;
-                printf("\tPayment declined.\n");
+        if (!fail || current_msg == MSG_EXIT){
+            if (timeout) {
+                printf("Simulating processing taking too long.\n");
+                sleep(20);
+                timeout = FALSE;
             }
 
-            int card = transaction.card_num;
-            int price = transaction.price;
-            fseek(undo_log, 2 * log_entries * sizeof(int), SEEK_SET);
-            fwrite(&card, sizeof(int), 1, undo_log);
-            fwrite(&price, sizeof(int), 1, undo_log);
-            log_entries++;
+            if (result < 0) {
+                printf("TIMEOUT OCCURRED! IT SEEMS LIKE THE COORDINATOR HAS CRASHED!\nAWAITING NEW SIGNAL FROM COORDINATOR\n");
+                current_msg = MSG_NONE;
+                status = TIMEOUT;
+            }
 
-            fseek(accounts, transaction.card_num * sizeof(int), SEEK_SET);
-            int new_balance = balance - transaction.price;
-            // printf("offset: %ld, value: %d\n", transaction.card_num * sizeof(int), new_balance);
-            size_t written = fwrite(&new_balance, sizeof(int), 1, accounts);
-            // printf("written: %lu\n", written);
+            if (current_msg == MSG_EXIT) break;
 
-            // Eu sei que parece sem sentido, mas esse read atualiza o valor no arquivo, sem ele new_balance nunca e escrito
-            fseek(accounts, transaction.card_num * sizeof(int), SEEK_SET);
-            int newest_balance = 0;
-            fread(&newest_balance, sizeof(int), 1, accounts);
-            // printf("newest: %d\n", newest_balance);
+            if (current_msg == MSG_PREPARE) {
+                printf("Received PREPARE command\n");
 
-            write(serverSocket, &status, sizeof(status));
-        }
-        else if (current_msg == MSG_COMMIT) {
-            printf("Received COMMIT command\n");
-            status = status == READY ? COMMITTED : status;
+                transaction_t transaction;
+                read(serverSocket, &transaction, sizeof(transaction_t));
 
-            if (status == COMMITTED) printf("\tSuccessfully commited!\n");
-            // printf("send: %d\n", status);
-            write(serverSocket, &status, sizeof(status));
-        }
-        else if (current_msg == MSG_ABORT) {
-            printf("Received ABORT command\n");
-            status = (status == READY || status == INIT || status == ABORT) ? ABORTED : status;
+                // printf("%d, %d\n", transaction.card_num, transaction.price);
 
-            int card = 0;
-            int change = 0;
+                fseek(accounts, transaction.card_num * sizeof(int), SEEK_SET);
+                int balance = 0;
+                fread(&balance, sizeof(int), 1, accounts);
 
-            fseek(undo_log, 2 * (log_entries - 1) * sizeof(int), SEEK_SET);
-            fread(&card, sizeof(int), 1, undo_log);
-            fread(&change, sizeof(int), 1, undo_log);
+                // printf("bal: %d\n", balance);
 
-            int balance = 0;
-            fseek(accounts, card * sizeof(int), SEEK_SET);
-            fread(&balance, sizeof(int), 1, accounts);
+                if (balance >= transaction.price) {
+                    status = READY;
+                    printf("\tPayment successful.\n");
 
-            balance += change;
-            fseek(accounts, card * sizeof(int), SEEK_SET);
-            // printf("offset: %ld, value: %d\n", card * sizeof(int), balance);
-            size_t written2 = fwrite(&balance, sizeof(int), 1, accounts);
-            // printf("written2: %lu\n", written2);
-            log_entries--;
+                    fseek(accounts, transaction.card_num * sizeof(int), SEEK_SET);
+                    int new_balance = balance - transaction.price;
+                    size_t written = fwrite(&new_balance, sizeof(int), 1, accounts);
+                }
+                else {
+                    status = ABORT;
+                    printf("\tPayment declined.\n");
 
-            // NAO REMOVER
-            fseek(accounts, card * sizeof(int), SEEK_SET);
-            int newestest_balance = 0;
-            fread(&newestest_balance, sizeof(int), 1, accounts);
-            // printf("newestest: %d\n", newestest_balance);
+                    insufficient_balance = TRUE;
+                }
 
-            if (status == READY || status == INIT) printf("\tSuccessfully aborted!\n");
-            write(serverSocket, &status, sizeof(status));
-        }
-        else if (current_msg == MSG_RESET) {
-            printf("Received RESET command\n");
-            status = INIT;
+                int card = transaction.card_num;
+                int price = transaction.price;
+                fseek(undo_log, 2 * log_entries * sizeof(int), SEEK_SET);
+                fwrite(&card, sizeof(int), 1, undo_log);
+                fwrite(&price, sizeof(int), 1, undo_log);
+                log_entries++;
+
+                // Eu sei que parece sem sentido, mas esse read atualiza o valor no arquivo, sem ele new_balance nunca e escrito
+                fseek(accounts, transaction.card_num * sizeof(int), SEEK_SET);
+                int newest_balance = 0;
+                fread(&newest_balance, sizeof(int), 1, accounts);
+                // printf("newest: %d\n", newest_balance);
+
+                write(serverSocket, &status, sizeof(status));
+            }
+            else if (current_msg == MSG_COMMIT) {
+                printf("Received COMMIT command\n");
+                status = status == READY ? COMMITTED : status;
+
+                if (status == COMMITTED) printf("\tSuccessfully commited!\n");
+                // printf("send: %d\n", status);
+                write(serverSocket, &status, sizeof(status));
+            }
+            else if (current_msg == MSG_ABORT) {
+                printf("Received ABORT command\n");
+                status = (status == READY || status == INIT || status == ABORT) ? ABORTED : status;
+
+                int card = 0;
+                int change = 0;
+
+                if (!insufficient_balance){
+                    fseek(undo_log, 2 * (log_entries - 1) * sizeof(int), SEEK_SET);
+                    fread(&card, sizeof(int), 1, undo_log);
+                    fread(&change, sizeof(int), 1, undo_log);
+
+                    int balance = 0;
+                    fseek(accounts, card * sizeof(int), SEEK_SET);
+                    fread(&balance, sizeof(int), 1, accounts);
+
+                    balance += change;
+                    fseek(accounts, card * sizeof(int), SEEK_SET);
+                    // printf("offset: %ld, value: %d\n", card * sizeof(int), balance);
+                    size_t written2 = fwrite(&balance, sizeof(int), 1, accounts);
+                    // printf("written2: %lu\n", written2);
+                    insufficient_balance = FALSE;
+                }
+                log_entries--;
+
+                // NAO REMOVER
+                fseek(accounts, card * sizeof(int), SEEK_SET);
+                int newestest_balance = 0;
+                fread(&newestest_balance, sizeof(int), 1, accounts);
+                // printf("newestest: %d\n", newestest_balance);
+
+                if (status == READY || status == INIT) printf("\tSuccessfully aborted!\n");
+                write(serverSocket, &status, sizeof(status));
+            }
+            else if (current_msg == MSG_RESET) {
+                printf("Received RESET command\n");
+                status = INIT;
+            }
         }
     }
 

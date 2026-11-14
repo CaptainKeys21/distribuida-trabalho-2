@@ -66,108 +66,115 @@ int main(int argc, char** args) {
 
     while (1) {
         if (status == COMMITTED || status == TIMEOUT || status == ABORTED) {
-            printf("status %d\n", status);
+            // printf("status %d\n", status);
             status = INIT;
             setSocketTimeout(0, serverSocket);
         }
         else if (status != INIT) {
-            printf("set\n");
+            // printf("set\n");
             setSocketTimeout(100000, serverSocket);
         }
 
         // Aguarda uma mensagem na mailbox usando variável de condição
         Message current_msg;
         // printf("Current status: %d\n", status);
-        if (status != INIT)printf("status2 %d\n", status);
+        // if (status != INIT)printf("status2 %d\n", status);
         long result = read(serverSocket, &current_msg, sizeof(current_msg));
 
-        if (timeout) {
-            printf("Simulating processing taking too long.\n");
-            sleep(30);
-            timeout = FALSE;
-        }
-
-        if (result < 0) {
-            printf("TIMEOUT OCCURRED! IT SEEMS LIKE THE COORDINATOR HAS CRASHED!\nAWAITING NEW SIGNAL FROM COORDINATOR\n");
-            current_msg = MSG_NONE;
-            status = TIMEOUT;
-        }
-
-        if (current_msg == MSG_EXIT || fail) break;
-
-        if (current_msg == MSG_PREPARE) {
-            printf("Received PREPARE command\n");
-
+        if (fail && current_msg == MSG_PREPARE) {
             transaction_t transaction;
             read(serverSocket, &transaction, sizeof(transaction_t));
+        }
 
-            fseek(seats, transaction.seat_num * sizeof(int), SEEK_SET);
-            int reserved = -1;
-            fread(&reserved, sizeof(int), 1, seats);
-            // printf("reserved: %d, %ld\n", reserved, transaction.seat_num * sizeof(int));
-
-            if (reserved) {
-                status = ABORT;
-                printf("\tSeat already reserved.\n");
-            }
-            else {
-                status = READY;
-                reserved = 1;
-                fseek(seats, transaction.seat_num * sizeof(int), SEEK_SET);
-                int reserve = 1;
-                fwrite(&reserve, sizeof(int), 1, seats);
-
-                fseek(seats, transaction.seat_num * sizeof(int), SEEK_SET);
-                int read = 1;
-                fread(&read, sizeof(int), 1, seats);
-
-                printf("\tSeat successfully reserved.\n");
+        if (!fail || current_msg == MSG_EXIT){
+            if (timeout) {
+                printf("Simulating processing taking too long.\n");
+                sleep(20);
+                timeout = FALSE;
             }
 
-            int num = transaction.seat_num;
-            fseek(undo_log, 2 * log_entries * sizeof(int), SEEK_SET);
-            fwrite(&num, sizeof(int), 1, undo_log);
-            fwrite(&reserved, sizeof(int), 1, undo_log);
-            log_entries++;
+            if (result < 0) {
+                printf("TIMEOUT OCCURRED! IT SEEMS LIKE THE COORDINATOR HAS CRASHED!\nAWAITING NEW SIGNAL FROM COORDINATOR\n");
+                current_msg = MSG_NONE;
+                status = TIMEOUT;
+            }
 
-            write(serverSocket, &status, sizeof(status));
+            if (current_msg == MSG_EXIT) break;
+
+            if (current_msg == MSG_PREPARE) {
+                printf("Received PREPARE command\n");
+
+                transaction_t transaction;
+                read(serverSocket, &transaction, sizeof(transaction_t));
+
+                fseek(seats, transaction.seat_num * sizeof(int), SEEK_SET);
+                int reserved = -1;
+                fread(&reserved, sizeof(int), 1, seats);
+                // printf("reserved: %d, %ld\n", reserved, transaction.seat_num * sizeof(int));
+
+                if (reserved) {
+                    status = ABORT;
+                    printf("\tSeat already reserved.\n");
+                }
+                else {
+                    status = READY;
+                    fseek(seats, transaction.seat_num * sizeof(int), SEEK_SET);
+                    int reserve = 1;
+                    fwrite(&reserve, sizeof(int), 1, seats);
+
+                    fseek(seats, transaction.seat_num * sizeof(int), SEEK_SET);
+                    int read = 1;
+                    fread(&read, sizeof(int), 1, seats);
+
+                    printf("\tSeat successfully reserved.\n");
+                }
+
+                int num = transaction.seat_num;
+                fseek(undo_log, 2 * log_entries * sizeof(int), SEEK_SET);
+                fwrite(&num, sizeof(int), 1, undo_log);
+                fwrite(&reserved, sizeof(int), 1, undo_log);
+                log_entries++;
+
+                write(serverSocket, &status, sizeof(status));
+            }
+            else if (current_msg == MSG_COMMIT) {
+                printf("Received COMMIT command\n");
+                status = status == READY ? COMMITTED : status;
+
+                if (status == COMMITTED) printf("\tSuccessfully commited!\n");
+                // printf("send: %d\n", status);
+                write(serverSocket, &status, sizeof(status));
+            }
+            else if (current_msg == MSG_ABORT) {
+                printf("Received ABORT command\n");
+                status = (status == READY || status == INIT || status == ABORT) ? ABORTED : status;
+                int reserved_seat = 0;
+                int previous_seat_status = 0;
+
+                fseek(undo_log, 2 * (log_entries - 1) * sizeof(int), SEEK_SET);
+                fread(&reserved_seat, sizeof(int), 1, undo_log);
+                fread(&previous_seat_status, sizeof(int), 1, undo_log);
+
+                // printf("prev: %d\n", previous_seat_status);
+
+                fseek(seats, reserved_seat * sizeof(int), SEEK_SET);
+                fwrite(&previous_seat_status, sizeof(int), 1, seats);
+                log_entries--;
+
+                int verify = 0;
+                fseek(seats, reserved_seat * sizeof(int), SEEK_SET);
+                fread(&verify, sizeof(int), 1, seats);
+
+                if (status == READY || status == INIT) printf("\tSuccessfully aborted!\n");
+                // printf("send: %d\n", status);
+                write(serverSocket, &status, sizeof(status));
+            }
+            else if (current_msg == MSG_RESET) {
+                printf("Received RESET command\n");
+                status = INIT;
+            }
         }
-        else if (current_msg == MSG_COMMIT) {
-            printf("Received COMMIT command\n");
-            status = status == READY ? COMMITTED : status;
 
-            if (status == COMMITTED) printf("\tSuccessfully commited!\n");
-            // printf("send: %d\n", status);
-            write(serverSocket, &status, sizeof(status));
-        }
-        else if (current_msg == MSG_ABORT) {
-            printf("Received ABORT command\n");
-            status = (status == READY || status == INIT || status == ABORT) ? ABORTED : status;
-            int reserved_seat = 0;
-            int previous_seat_status = 0;
-
-            fseek(undo_log, 2 * (log_entries - 1) * sizeof(int), SEEK_SET);
-            fread(&reserved_seat, sizeof(int), 1, undo_log);
-            fread(&previous_seat_status, sizeof(int), 1, undo_log);
-
-            // printf("prev: %d\n", previous_seat_status);
-
-            fseek(seats, reserved_seat * sizeof(int), SEEK_SET);
-            fwrite(&previous_seat_status, sizeof(int), 1, seats);
-            log_entries--;
-
-            int verify = 0;
-            fseek(seats, reserved_seat * sizeof(int), SEEK_SET);
-            fread(&verify, sizeof(int), 1, seats);
-
-            if (status == READY || status == INIT) printf("\tSuccessfully aborted!\n");
-            // printf("send: %d\n", status);
-            write(serverSocket, &status, sizeof(status));
-        }
-        else if (current_msg == MSG_RESET) {
-            printf("Received RESET command\n");
-            status = INIT;
-        }
     }
     free(log_name);
     fclose(undo_log);
