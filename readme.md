@@ -1,10 +1,25 @@
 # INFO
 
-This folder contains the source files for a simple cinema ticket sale system implemented using the Two-Phase Commit protocol.
+This folder contains the source file for two different demonstrations: a simple, barebones implementation of the Two-Phase Commit protocol without any additional functionality, as well as a simple cinema ticket sale system implemented using the former as a base.
 
 The protocol was implemented using berkeley sockets in the TCP mode. The arguments each program takes are specified by each one of them, if any are missing. The coordinator executes its operations as a procedure, while the participants operate as finite state machines reacting to their respective coordinator's inputs.
 
 To simulate database I/O operations, simple binary files were used.
+
+# The protocol implementation
+
+Disclaimer: due to not being the main example, the standalone protocol may still have errors that were fixed in the example's implementation.
+
+## Compilation
+
+To compile the backup system, you must have GCC installed in your system. All that is necessary is to run the following commands to compile the coordinator's and the participants' programs: `gcc coordenador.c -o coordenador` and `gcc participante.c -o participante`.
+
+## Use
+
+To run the coordinator program, provide the desired address, port and participant quantity: `./coordenador 127.0.0.1 9734 3`. To run the participant program, provide the same arguments as the ones passed to the coordinator, except the participant amount, alongside a delay value, in microseconds, to simulate processing a request, and the string "fail" to simulate the node aborting the procedure, or any other string to proceed as normal: `./participante 127.0.0.1 9734 100 success`.
+
+The coordinator program must be initialized before any participant is started. The participants will immediately attempt to connect to their server. If the server is not running after starting a participant, the participant's process will exit. The coordinator will only start if the amount of participants connected to it reaches its participant quantity argument.
+
 
 # The example
 
