@@ -14,6 +14,6 @@ To compile the backup system, you must have GCC installed in your system. All th
 
 ## Use
 
-To run the coordinator program, provide the desired address, port, transaction price, card number, cinema seat number and "fail" or "success" (to simulate server failure): `./coordenador_cinema 127.0.0.1 9734 40 4 10 success`. To run the participant programs, provide the same address and port as the coordinator, alongside a string containing the name of the files each of them will open (or create, if not present) and either "timeout", "fail" or "success" to determine the node's behavior: `./cinema_manager 127.0.0.1 9734 cinema_seats success` and `./payment 127.0.0.1 9734 bank_accounts success`.
+To run the coordinator program, provide the desired address, port, timeout time (in microseconds), transaction price, card number, cinema seat number and "fail" or "success" (to simulate server failure): `./coordenador_cinema 127.0.0.1 9734 40 4 10 success`. To run the participant programs, provide the same address and port as the coordinator, alongside a string containing the name of the files each of them will open (or create, if not present) and either "timeout", "fail" or "success" to determine the node's behavior: `./cinema_manager 127.0.0.1 9734 cinema_seats success` and `./payment 127.0.0.1 9734 bank_accounts success`.
 
 The named files created by the programs may also be edited to create different configurations of available seats and bank balances.
