@@ -21,7 +21,7 @@ void* waitForResponse(void* args);
 
 int main(int argc, char** args) {
 
-    if (argc < 7) {
+    if (argc < 8) {
         printf("Format: ./coordenador_cinema <IP> <Port> <timeout_usec> <price> <card_num> <seat_num> <fail/success>");
         return -1;
     }
@@ -72,6 +72,13 @@ int main(int argc, char** args) {
     execute_transaction(101, clientSockets, PARTICIPANTS_CINEMA, fail, transaction);
 
     for (int i = 0; i < PARTICIPANTS_CINEMA; i++) {
+        struct timeval timeout;
+        timeout.tv_sec = 1;
+        timeout.tv_usec = 0;
+        setsockopt(clientSockets[i], SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+
+        printf("Disconnecting participant %d\n", i);
+
         Message message = MSG_EXIT;
         write(clientSockets[i], &message, sizeof(Message));
         close(clientSockets[i]);
@@ -118,7 +125,10 @@ void execute_transaction(int tx_id, int* clientSockets, int count, int simulate_
         if (received[i]) {
             pthread_join(threads[i], NULL);
             if (statuses[i] != READY) all_agreed = FALSE;
-            // printf("status %d: %d\n", i, statuses[i]);
+            if (statuses[i] == TIMEOUT) {
+                received[i] = FALSE;
+                printf("[WARNING participant %d timed out!\n", i);
+            }
         }
         else all_agreed = FALSE;
     }
@@ -135,19 +145,25 @@ void execute_transaction(int tx_id, int* clientSockets, int count, int simulate_
         free(threads);
         free(statuses);
         free(received);
+        free(args);
         return; // Retorna sem enviar Commit ou Abort
+    }
+    else {
+        printf("\n[Coordenador] Enviando: %s\n", all_agreed ? "COMMIT" : "ABORT");
     }
 
 
     // FASE 2: Commit ou Abort
     for (int i = 0; i < count; i++) {
-        Message message = all_agreed ? MSG_COMMIT : MSG_ABORT;
-        long result = write(clientSockets[i], &message, sizeof(message));
-        received[i] = result != -1;
-        if (result != -1){
-            args[i].socket = clientSockets[i];
-            args[i].status = &statuses[i];
-            pthread_create(&threads[i], NULL, waitForResponse, &args[i]);
+        if (received[i]){
+            Message message = all_agreed ? MSG_COMMIT : MSG_ABORT;
+            long result = write(clientSockets[i], &message, sizeof(message));
+            received[i] = result != -1;
+            if (result != -1){
+                args[i].socket = clientSockets[i];
+                args[i].status = &statuses[i];
+                pthread_create(&threads[i], NULL, waitForResponse, &args[i]);
+            }
         }
     }
 
@@ -156,6 +172,7 @@ void execute_transaction(int tx_id, int* clientSockets, int count, int simulate_
         if (received[i]) {
             pthread_join(threads[i], NULL);
             if (statuses[i] != COMMITTED) everything_is_alright = FALSE;
+            if (statuses[i] == TIMEOUT) printf("[WARNING] participant %d timed out!\n", i);
             // printf("status %d: %d\n", i, statuses[i]);
         }
         else everything_is_alright = FALSE;
@@ -174,6 +191,7 @@ void execute_transaction(int tx_id, int* clientSockets, int count, int simulate_
     free(threads);
     free(statuses);
     free(received);
+    free(args);
 }
 
 void* waitForResponse(void* args) {

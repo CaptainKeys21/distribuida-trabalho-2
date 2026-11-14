@@ -14,8 +14,8 @@ void setSocketTimeout(long usec, int socket);
 
 int main(int argc, char** args) {
 
-    if (argc < 4) {
-        printf("Format: ./cinema_manager <IP> <Port> <name>\n");
+    if (argc < 5) {
+        printf("Format: ./cinema_manager <IP> <Port> <name> <fail/timeout/success>\n");
         return -1;
     }
 
@@ -35,6 +35,9 @@ int main(int argc, char** args) {
         return  -2;
     }
     char* name = args[3];
+
+    int fail = strcmp(args[4], "fail") == 0;
+    int timeout = strcmp(args[4], "timeout") == 0;
 
     char* log_name = calloc(1, strlen(name) + 5);
     strcpy(log_name, name);
@@ -59,19 +62,30 @@ int main(int argc, char** args) {
     }
 
     Status status = INIT;
+    setSocketTimeout(0, serverSocket);
+
     while (1) {
-        if (status == COMMITTED || status == INIT || status == TIMEOUT || status == ABORTED) {
+        if (status == COMMITTED || status == TIMEOUT || status == ABORTED) {
+            printf("status %d\n", status);
             status = INIT;
             setSocketTimeout(0, serverSocket);
         }
-        else {
+        else if (status != INIT) {
+            printf("set\n");
             setSocketTimeout(100000, serverSocket);
         }
 
         // Aguarda uma mensagem na mailbox usando variável de condição
         Message current_msg;
         // printf("Current status: %d\n", status);
+        if (status != INIT)printf("status2 %d\n", status);
         long result = read(serverSocket, &current_msg, sizeof(current_msg));
+
+        if (timeout) {
+            printf("Simulating processing taking too long.\n");
+            sleep(30);
+            timeout = FALSE;
+        }
 
         if (result < 0) {
             printf("TIMEOUT OCCURRED! IT SEEMS LIKE THE COORDINATOR HAS CRASHED!\nAWAITING NEW SIGNAL FROM COORDINATOR\n");
@@ -79,7 +93,7 @@ int main(int argc, char** args) {
             status = TIMEOUT;
         }
 
-        if (current_msg == MSG_EXIT) break;
+        if (current_msg == MSG_EXIT || fail) break;
 
         if (current_msg == MSG_PREPARE) {
             printf("Received PREPARE command\n");
